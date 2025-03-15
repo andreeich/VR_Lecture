@@ -50,7 +50,12 @@ const fragmentShaderSource = `
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
         vec3 specular = spec * specularColor;
 
+        // Calculate full light contribution
         vec3 result = ambient + diffuse + specular;
+
+        // Apply higher brightness for anaglyphic view
+        result = result * 1.5; // Increase brightness for better visibility in anaglyph
+
         gl_FragColor = vec4(result, 1.0);
     }
 `;

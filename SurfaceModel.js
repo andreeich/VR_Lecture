@@ -146,12 +146,39 @@ export class SurfaceModel {
 
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
 
-		// Draw lines
-		for (let i = 0; i < this.uSteps; i++) {
-			for (let j = 0; j < this.vSteps; j++) {
-				const start = (i * (this.vSteps + 1) + j) * 2;
-				gl.drawElements(gl.LINE_LOOP, 4, gl.UNSIGNED_SHORT, start * 2);
+		// Draw lines along U direction
+		for (let i = 0; i <= this.uSteps; i++) {
+			const offset = i * (this.vSteps + 1);
+			const count = this.vSteps + 1;
+			gl.drawArrays(gl.LINE_STRIP, offset, count);
+		}
+
+		// Draw lines along V direction
+		for (let j = 0; j <= this.vSteps; j++) {
+			const vertices = [];
+			for (let i = 0; i <= this.uSteps; i++) {
+				const idx = (i * (this.vSteps + 1) + j) * 3;
+				vertices.push(
+					this.vertices[idx],
+					this.vertices[idx + 1],
+					this.vertices[idx + 2],
+				);
 			}
+
+			// Create and bind a temporary buffer for V-direction lines
+			const tempBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, tempBuffer);
+			gl.bufferData(
+				gl.ARRAY_BUFFER,
+				new Float32Array(vertices),
+				gl.STATIC_DRAW,
+			);
+			gl.vertexAttribPointer(program.vertexAttrib, 3, gl.FLOAT, false, 0, 0);
+
+			gl.drawArrays(gl.LINE_STRIP, 0, this.uSteps + 1);
+
+			// Clean up temporary buffer
+			gl.deleteBuffer(tempBuffer);
 		}
 	}
 

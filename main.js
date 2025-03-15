@@ -13,6 +13,11 @@ const renderingParams = {
 	nearClip: 0.1,
 	convergence: 10.0,
 };
+const lightPosition = {
+	x: 5,
+	y: 10,
+	z: 5,
+};
 
 function getUVSteps() {
 	return {
@@ -40,7 +45,6 @@ async function initWebcam() {
 		const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 		webcamElement.srcObject = stream;
 
-		// Create and set up video texture
 		videoTexture = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, videoTexture);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -71,10 +75,25 @@ function initBackgroundShaders() {
         }
     `;
 
-	program.backgroundProgram = new ShaderProgram("Background").init(
-		gl,
-		backgroundVertexShader,
-		backgroundFragmentShader,
+	// Create a proper shader program instance
+	const backgroundProgram = new ShaderProgram("Background");
+	backgroundProgram.init(gl, backgroundVertexShader, backgroundFragmentShader);
+
+	// Store the program object, not just the ID
+	program.backgroundProgram = backgroundProgram;
+
+	// Initialize background shader attributes and uniforms
+	program.backgroundProgram.positionLoc = gl.getAttribLocation(
+		program.backgroundProgram.prog,
+		"position",
+	);
+	program.backgroundProgram.texCoordLoc = gl.getAttribLocation(
+		program.backgroundProgram.prog,
+		"texCoord",
+	);
+	program.backgroundProgram.textureLoc = gl.getUniformLocation(
+		program.backgroundProgram.prog,
+		"uTexture",
 	);
 }
 
@@ -83,12 +102,16 @@ function drawVideoBackground() {
 		initBackgroundShaders();
 	}
 
-	gl.useProgram(program.backgroundProgram);
+	gl.useProgram(program.backgroundProgram.prog);
 
 	// Set up a simple quad for the background
 	const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
 
-	const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
+	// Flip the texture coordinates both horizontally and vertically
+	// Original: [0, 0, 1, 0, 0, 1, 1, 1]
+	// Horizontal flip: [1, 0, 0, 0, 1, 1, 0, 1]
+	// Vertical flip: [1, 1, 0, 1, 1, 0, 0, 0]
+	const texCoords = new Float32Array([1, 1, 0, 1, 1, 0, 0, 0]);
 
 	// Create and bind buffers
 	const vertexBuffer = gl.createBuffer();
@@ -100,24 +123,30 @@ function drawVideoBackground() {
 	gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
 
 	// Set up attributes
-	const positionLoc = gl.getAttribLocation(
-		program.backgroundProgram,
-		"position",
-	);
-	const texCoordLoc = gl.getAttribLocation(
-		program.backgroundProgram,
-		"texCoord",
-	);
-
 	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-	gl.enableVertexAttribArray(positionLoc);
-	gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(program.backgroundProgram.positionLoc);
+	gl.vertexAttribPointer(
+		program.backgroundProgram.positionLoc,
+		2,
+		gl.FLOAT,
+		false,
+		0,
+		0,
+	);
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-	gl.enableVertexAttribArray(texCoordLoc);
-	gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(program.backgroundProgram.texCoordLoc);
+	gl.vertexAttribPointer(
+		program.backgroundProgram.texCoordLoc,
+		2,
+		gl.FLOAT,
+		false,
+		0,
+		0,
+	);
 
-	// Update texture
+	// Set the texture unit
+	gl.activeTexture(gl.TEXTURE0);
 	gl.bindTexture(gl.TEXTURE_2D, videoTexture);
 	gl.texImage2D(
 		gl.TEXTURE_2D,
@@ -127,18 +156,21 @@ function drawVideoBackground() {
 		gl.UNSIGNED_BYTE,
 		webcamElement,
 	);
+	gl.uniform1i(program.backgroundProgram.textureLoc, 0);
 
 	// Draw
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-	// Switch back to main program
+	// Clean up
+	gl.deleteBuffer(vertexBuffer);
+	gl.deleteBuffer(texCoordBuffer);
+
 	gl.useProgram(program.prog);
 }
 
 function setupUIControls() {
 	const stepperTypes = ["u", "v"];
 
-	// biome-ignore lint/complexity/noForEach: <explanation>
 	stepperTypes.forEach((type) => {
 		const stepper = document.getElementById(`${type}-stepper`);
 		const counter = document.getElementById(`${type}-counter`);
@@ -168,35 +200,36 @@ function setupStereoControls() {
 		slider.addEventListener("input", (e) => {
 			const val = Number.parseFloat(e.target.value);
 			value.textContent = val;
-			renderingParams[
-				control
-					.split("-")
-					.map((word, index) =>
-						index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1),
-					)
-					.join("")
-			] = val;
+			const paramName = control
+				.split("-")
+				.map((word, index) =>
+					index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1),
+				)
+				.join("");
+			console.log(`Setting ${paramName} to ${val}`);
+			renderingParams[paramName] = val;
 			draw();
 		});
 	});
 }
 
-// function animateLight(time) {
-// 	const radius = 10.0;
-// 	const speed = 0.001;
-// 	const x = radius * Math.cos(time * speed);
-// 	const z = radius * Math.sin(time * speed);
-// 	const y = 5.0;
+function animateLight(time) {
+	const radius = 10.0;
+	const speed = 0.001;
 
-// 	if (program) {
-// 		gl.uniform3f(program.lightDirectionUni, x, y, z);
-// 		draw();
-// 	}
-// 	requestAnimationFrame(animateLight);
-// }
+	lightPosition.x = radius * Math.cos(time * speed);
+	lightPosition.y = 5.0;
+	lightPosition.z = radius * Math.sin(time * speed);
+
+	requestAnimationFrame(animateLight);
+}
+
+function animate() {
+	draw();
+	requestAnimationFrame(animate);
+}
 
 function drawEye(eyeOffset) {
-	console.log("renderingParams", renderingParams);
 	const projection = m4.perspective(
 		(renderingParams.fov * Math.PI) / 180,
 		1,
@@ -225,10 +258,18 @@ function drawEye(eyeOffset) {
 
 	const modelViewProjection = m4.multiply(projection, matAcc1);
 
-	// Draw filled model
+	// Set up matrices
 	gl.uniformMatrix4fv(program.matrixUni, false, modelViewProjection);
 	const normalMatrix = m4.transpose(m4.inverse(matAcc1));
 	gl.uniformMatrix4fv(program.normalMatrixUni, false, normalMatrix);
+
+	gl.uniform3f(
+		program.lightDirectionUni,
+		lightPosition.x,
+		lightPosition.y,
+		lightPosition.z,
+	);
+	gl.uniform3fv(program.viewPositionUni, [0, 0, 5]); // Camera position
 
 	// Draw filled surface
 	gl.uniform1i(program.isWireframeUni, false);
@@ -251,13 +292,20 @@ function draw() {
 		drawVideoBackground();
 	}
 
+	// Set lighting parameters with brighter values for anaglyphic view
+	gl.uniform3f(program.ambientColorUni, 0.3, 0.3, 0.3); // Brighter ambient
+	gl.uniform3f(program.diffuseColorUni, 0.8, 0.8, 0.8); // Brighter diffuse
+	gl.uniform3f(program.specularColorUni, 1.0, 1.0, 1.0); // Full specular
+	gl.uniform1f(program.shininessUni, 32.0);
+
 	// Draw for left eye (red)
 	gl.colorMask(true, false, false, true);
+	gl.clear(gl.DEPTH_BUFFER_BIT);
 	drawEye(-renderingParams.eyeSeparation / 2);
 
 	// Draw for right eye (cyan)
-	gl.clear(gl.DEPTH_BUFFER_BIT);
 	gl.colorMask(false, true, true, true);
+	gl.clear(gl.DEPTH_BUFFER_BIT);
 	drawEye(renderingParams.eyeSeparation / 2);
 
 	gl.colorMask(true, true, true, true);
@@ -280,8 +328,9 @@ async function init() {
 
 		setupUIControls();
 		setupStereoControls();
-		draw();
-		// animateLight(0);
+
+		animateLight(0);
+		animate();
 	} catch (e) {
 		console.error(`Initialization error: ${e}`);
 	}
