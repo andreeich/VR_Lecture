@@ -7,6 +7,8 @@ let program;
 let ball;
 let videoTexture;
 let webcamElement;
+let sensorSocket;
+let orientationMatrix = m4.identity(); // Initialize as identity matrix
 const renderingParams = {
 	eyeSeparation: 0.5,
 	fov: 45,
@@ -229,6 +231,71 @@ function animate() {
 	requestAnimationFrame(animate);
 }
 
+// Implementation of getRotationMatrixFromVector (based on Android SensorManager)
+function getRotationMatrixFromVector(rotationVector) {
+	const q0 = rotationVector[0];
+	const q1 = rotationVector[1];
+	const q2 = rotationVector[2];
+
+	const sq_q1 = 2 * q1 * q1;
+	const sq_q2 = 2 * q2 * q2;
+	const sq_q0 = 2 * q0 * q0;
+	const q0_q1 = 2 * q0 * q1;
+	const q0_q2 = 2 * q0 * q2;
+	const q1_q2 = 2 * q1 * q2;
+
+	// Rotation matrix (column-major for WebGL)
+	const R = new Float32Array(16);
+	R[0] = 1 - sq_q1 - sq_q2; // m00
+	R[1] = q0_q1 - q1_q2; // m10
+	R[2] = q0_q2 + q1_q2; // m20
+	R[3] = 0; // m30
+	R[4] = q0_q1 + q1_q2; // m01
+	R[5] = 1 - sq_q0 - sq_q2; // m11
+	R[6] = q1_q2 - q0_q1; // m21
+	R[7] = 0; // m31
+	R[8] = q0_q2 - q1_q2; // m02
+	R[9] = q1_q2 + q0_q1; // m12
+	R[10] = 1 - sq_q0 - sq_q1; // m22
+	R[11] = 0; // m32
+	R[12] = 0; // m03
+	R[13] = 0; // m13
+	R[14] = 0; // m23
+	R[15] = 1; // m33
+
+	// Apply coordinate system correction (rotate 90 degrees around X-axis)
+	const correctionMatrix = m4.axisRotation([1, 0, 0], Math.PI / 2);
+	return m4.multiply(correctionMatrix, R);
+}
+
+function initSensorWebSocket() {
+	const wsUrl =
+		"ws://192.168.0.111:8080/sensor/connect?type=android.sensor.game_rotation_vector";
+	sensorSocket = new WebSocket(wsUrl);
+
+	sensorSocket.onopen = () => {
+		console.log("Connected to Sensor Server WebSocket");
+	};
+
+	sensorSocket.onmessage = (event) => {
+		const data = JSON.parse(event.data);
+		if (data.values && data.values.length >= 3) {
+			// Use first three components [x, y, z] as rotation vector
+			const rotationVector = data.values.slice(0, 3); // [x, y, z]
+			orientationMatrix = getRotationMatrixFromVector(rotationVector);
+		}
+	};
+
+	sensorSocket.onerror = (error) => {
+		console.error("WebSocket error:", error);
+	};
+
+	sensorSocket.onclose = () => {
+		console.log("WebSocket closed. Attempting to reconnect...");
+		setTimeout(initSensorWebSocket, 5000);
+	};
+}
+
 function drawEye(eyeOffset) {
 	const projection = m4.perspective(
 		(renderingParams.fov * Math.PI) / 180,
@@ -237,7 +304,8 @@ function drawEye(eyeOffset) {
 		100,
 	);
 
-	const modelView = ball.getViewMatrix();
+	// Use orientationMatrix from sensor
+	const modelView = orientationMatrix;
 
 	// Apply eye offset
 	const eyeMatrix = m4.translation(eyeOffset, 0, 0);
@@ -319,8 +387,6 @@ async function init() {
 			throw "Browser does not support WebGL";
 		}
 
-		ball = new TrackballRotator(canvas, draw, 0);
-
 		await initWebcam();
 		initShaderProgram();
 		initSurface();
@@ -328,6 +394,9 @@ async function init() {
 
 		setupUIControls();
 		setupStereoControls();
+
+		// Initialize WebSocket for sensor data
+		initSensorWebSocket();
 
 		animateLight(0);
 		animate();
