@@ -4,7 +4,6 @@ import { SurfaceModel } from "./SurfaceModel.js";
 let gl;
 let surface;
 let program;
-let ball;
 let videoTexture;
 let webcamElement;
 let sensorSocket;
@@ -231,41 +230,84 @@ function animate() {
 	requestAnimationFrame(animate);
 }
 
-// Implementation of getRotationMatrixFromVector (based on Android SensorManager)
-function getRotationMatrixFromVector(rotationVector) {
-	const q0 = rotationVector[0];
-	const q1 = rotationVector[1];
-	const q2 = rotationVector[2];
+function quaternionToMatrix(q) {
+	// Extract quaternion components: q = [w, x, y, z]
+	const q0 = q[0]; // w (cos(θ/2))
+	const q1 = q[1]; // x (x*sin(θ/2))
+	const q2 = q[2]; // y (y*sin(θ/2))
+	const q3 = q[3]; // z (z*sin(θ/2))
 
-	const sq_q1 = 2 * q1 * q1;
-	const sq_q2 = 2 * q2 * q2;
-	const sq_q0 = 2 * q0 * q0;
-	const q0_q1 = 2 * q0 * q1;
-	const q0_q2 = 2 * q0 * q2;
-	const q1_q2 = 2 * q1 * q2;
+	// Normalize quaternion to ensure unit length
+	const norm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+	const w = norm > 0 ? q0 / norm : 0;
+	const x = norm > 0 ? q1 / norm : 0;
+	const y = norm > 0 ? q2 / norm : 0;
+	const z = norm > 0 ? q3 / norm : 0;
 
-	// Rotation matrix (column-major for WebGL)
+	// Compute 3x3 rotation matrix elements
+	const r00 = 2 * (w * w + x * x) - 1;
+	const r01 = 2 * (x * y - w * z);
+	const r02 = 2 * (x * z + w * y);
+
+	const r10 = 2 * (x * y + w * z);
+	const r11 = 2 * (w * w + y * y) - 1;
+	const r12 = 2 * (y * z - w * x);
+
+	const r20 = 2 * (x * z - w * y);
+	const r21 = 2 * (y * z + w * x);
+	const r22 = 2 * (w * w + z * z) - 1;
+
+	// Create 4x4 matrix (column-major for WebGL)
 	const R = new Float32Array(16);
-	R[0] = 1 - sq_q1 - sq_q2; // m00
-	R[1] = q0_q1 - q1_q2; // m10
-	R[2] = q0_q2 + q1_q2; // m20
+	R[0] = r00; // m00
+	R[1] = r10; // m10
+	R[2] = r20; // m20
 	R[3] = 0; // m30
-	R[4] = q0_q1 + q1_q2; // m01
-	R[5] = 1 - sq_q0 - sq_q2; // m11
-	R[6] = q1_q2 - q0_q1; // m21
+	R[4] = r01; // m01
+	R[5] = r11; // m11
+	R[6] = r21; // m21
 	R[7] = 0; // m31
-	R[8] = q0_q2 - q1_q2; // m02
-	R[9] = q1_q2 + q0_q1; // m12
-	R[10] = 1 - sq_q0 - sq_q1; // m22
+	R[8] = r02; // m02
+	R[9] = r12; // m12
+	R[10] = r22; // m22
 	R[11] = 0; // m32
 	R[12] = 0; // m03
 	R[13] = 0; // m13
 	R[14] = 0; // m23
 	R[15] = 1; // m33
 
+	// Apply coordinate system correction
+	// Original mapping (R_x(π/2)):
+	//   Sensor X (east) → WebGL X (right)
+	//   Sensor Y (north) → WebGL Z (up)
+	//   Sensor Z (up) → WebGL -Y (backward)
+	// Desired mapping (swap Y and Z):
+	//   Sensor X (east) → WebGL X (right)
+	//   Sensor Y (north) → WebGL -Y (backward)
+	//   Sensor Z (up) → WebGL Z (up)
+	let correctionMatrix = new Float32Array([
+		1,
+		0,
+		0,
+		0, // X → X
+		0,
+		0,
+		-1,
+		0, // Y → -Y
+		0,
+		1,
+		0,
+		0, // Z → Z
+		0,
+		0,
+		0,
+		1, // Homogeneous coordinate
+	]);
+	let resultMatrix = m4.multiply(correctionMatrix, R);
 	// Apply coordinate system correction (rotate 90 degrees around X-axis)
-	const correctionMatrix = m4.axisRotation([1, 0, 0], Math.PI / 2);
-	return m4.multiply(correctionMatrix, R);
+	correctionMatrix = m4.axisRotation([1, 0, 0], Math.PI / 2);
+	resultMatrix = m4.multiply(correctionMatrix, R);
+	return resultMatrix;
 }
 
 function initSensorWebSocket() {
@@ -279,10 +321,17 @@ function initSensorWebSocket() {
 
 	sensorSocket.onmessage = (event) => {
 		const data = JSON.parse(event.data);
-		if (data.values && data.values.length >= 3) {
-			// Use first three components [x, y, z] as rotation vector
-			const rotationVector = data.values.slice(0, 3); // [x, y, z]
-			orientationMatrix = getRotationMatrixFromVector(rotationVector);
+		if (data.values && data.values.length >= 4) {
+			// Sensor data: [x*sin(θ/2), y*sin(θ/2), z*sin(θ/2), cos(θ/2)]
+			// Reorder to [w, x, y, z] for quaternionToMatrix
+			const quaternion = [
+				data.values[3],
+				data.values[0],
+				data.values[1],
+				data.values[2],
+			];
+			// console.log("Quaternion:", quaternion); // Debug: verify order
+			orientationMatrix = quaternionToMatrix(quaternion);
 		}
 	};
 
