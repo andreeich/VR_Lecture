@@ -5,83 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CGW: Spatial Audio | Andrei Chervoniak</title>
     <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" />
   </head>
 
-  <body>
-    <h1>CGW: Spatial Audio</h1>
+  <body class="my-6">
+    <h1 class="title is-2">CGW: Spatial Audio</h1>
     <article class="canvas-container">
       <canvas width="1200" height="1200" style="width: 400px; height: 400px"></canvas>
       <section class="canvas-container__controls">
-        <h2>Control panel</h2>
+        <h2 class="title is-4">Control panel</h2>
         <div class="form-input">
-          <label for="u-stepper">The number of U polylines</label>
+          <label class="label" for="u-stepper">The number of U polylines</label>
           <div class="form-input__slider">
             <span id="u-counter" class="form-input__value">50</span>
             <input type="range" name="u-stepper" id="u-stepper" min="20" max="100" value="50" />
           </div>
         </div>
         <div class="form-input">
-          <label for="v-stepper">The number of V polylines</label>
+          <label class="label" for="v-stepper">The number of V polylines</label>
           <div class="form-input__slider">
             <span id="v-counter" class="form-input__value">50</span>
             <input type="range" name="v-stepper" id="v-stepper" min="20" max="100" value="50" />
           </div>
         </div>
         <div class="form-input">
-          <label for="eye-separation">Eye Separation</label>
+          <label class="label" for="eye-separation">Eye Separation</label>
           <div class="form-input__slider">
             <span id="eye-separation-value" class="form-input__value">0.5</span>
             <input type="range" name="eye-separation" id="eye-separation" min="0.1" max="2.0" step="0.1" value="0.5" />
           </div>
         </div>
         <div class="form-input">
-          <label for="fov">Field of View (degrees)</label>
+          <label class="label" for="fov">Field of View (degrees)</label>
           <div class="form-input__slider">
             <span id="fov-value" class="form-input__value">45</span>
             <input type="range" name="fov" id="fov" min="30" max="120" value="45" />
           </div>
         </div>
         <div class="form-input">
-          <label for="near-clip">Near Clipping Distance</label>
+          <label class="label" for="near-clip">Near Clipping Distance</label>
           <div class="form-input__slider">
             <span id="near-clip-value" class="form-input__value">0.1</span>
             <input type="range" name="near-clip" id="near-clip" min="0.1" max="5.0" step="0.1" value="0.1" />
           </div>
         </div>
         <div class="form-input">
-          <label for="convergence">Convergence Distance</label>
+          <label class="label" for="convergence">Convergence Distance</label>
           <div class="form-input__slider">
             <span id="convergence-value" class="form-input__value">10.0</span>
             <input type="range" name="convergence" id="convergence" min="5.0" max="20.0" step="0.1" value="10.0" />
           </div>
         </div>
         <div class="form-input">
-          <label for="soundFilter">Enable Peak Filter</label>
-          <input type="checkbox" name="soundFilter" id="soundFilter" checked />
+          <label class="label" for="soundFilter">
+            <input type="checkbox" name="soundFilter" id="soundFilter" checked />
+            Enable Peak Filter
+          </label>
         </div>
         <div class="form-input">
-          <label for="filterFrequency">Filter Frequency (Hz)</label>
+          <label class="label" for="filterFrequency">Filter Frequency (Hz)</label>
           <div class="form-input__slider">
-            <span id="filterFrequency-value" class="form-input__value">1000</span>
+            <span id="filterFrequency-value" class="form-input__value" style="width: 4ch">1000</span>
             <input type="range" name="filterFrequency" id="filterFrequency" min="100" max="5000" value="1000" />
           </div>
         </div>
         <div class="form-input">
-          <label for="filterQ">Filter Q</label>
+          <label class="label" for="filterQ">Filter Q</label>
           <div class="form-input__slider">
             <span id="filterQ-value" class="form-input__value">1.0</span>
             <input type="range" name="filterQ" id="filterQ" min="0.1" max="10.0" step="0.1" value="1.0" />
           </div>
         </div>
         <div class="form-input">
-          <label for="filterGain">Filter Gain (dB)</label>
+          <label class="label" for="filterGain">Filter Gain (dB)</label>
           <div class="form-input__slider">
             <span id="filterGain-value" class="form-input__value">6</span>
             <input type="range" name="filterGain" id="filterGain" min="-20" max="20" value="6" />
           </div>
         </div>
         <div class="form-input">
-          <button id="startAudio">Start Audio</button>
+          <button class="button" id="startAudio">Start Audio</button>
         </div>
         <video id="webcam" style="display: none" autoplay playsinline></video>
       </section>
