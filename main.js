@@ -199,8 +199,13 @@ function setupUIControls() {
 	// Audio filter controls
 	const soundFilterCheckbox = document.getElementById("soundFilter");
 	const filterFrequencySlider = document.getElementById("filterFrequency");
+	const filterFrequencyCounter = document.getElementById(
+		"filterFrequency-value",
+	);
 	const filterQSlider = document.getElementById("filterQ");
+	const filterQCounter = document.getElementById("filterQ-value");
 	const filterGainSlider = document.getElementById("filterGain");
+	const filterGainCounter = document.getElementById("filterGain-value");
 	const startAudioButton = document.getElementById("startAudio");
 
 	// Disable filter controls until audio starts
@@ -226,16 +231,29 @@ function setupUIControls() {
 
 	soundFilterCheckbox.addEventListener("input", () => {
 		if (audio) audio.enableFilter(soundFilterCheckbox.checked);
+		if (soundFilterCheckbox.checked) {
+			filterFrequencySlider.disabled = false;
+			filterQSlider.disabled = false;
+			filterGainSlider.disabled = false;
+		} else {
+			filterFrequencySlider.disabled = true;
+			filterQSlider.disabled = true;
+			filterGainSlider.disabled = true;
+		}
 	});
 	filterFrequencySlider.addEventListener("input", () => {
 		if (audio)
 			audio.setFilterFrequency(Number.parseFloat(filterFrequencySlider.value));
+		filterFrequencyCounter.textContent = filterFrequencySlider.value;
 	});
 	filterQSlider.addEventListener("input", () => {
 		if (audio) audio.setFilterQ(Number.parseFloat(filterQSlider.value));
+		if (filterQCounter) filterQCounter.textContent = filterQSlider.value;
 	});
 	filterGainSlider.addEventListener("input", () => {
 		if (audio) audio.setFilterGain(Number.parseFloat(filterGainSlider.value));
+		if (filterGainCounter)
+			filterGainCounter.textContent = filterGainSlider.value;
 	});
 }
 
@@ -358,7 +376,7 @@ function quaternionToMatrix(q) {
 
 function initSensorWebSocket() {
 	const wsUrl =
-		"ws://192.168.0.111:8080/sensor/connect?type=android.sensor.game_rotation_vector";
+		"ws://192.168.0.157:8080/sensor/connect?type=android.sensor.game_rotation_vector";
 	sensorSocket = new WebSocket(wsUrl);
 
 	sensorSocket.onopen = () => {
@@ -447,6 +465,7 @@ function drawEye(eyeOffset) {
 	const basePosition = [radius, 0, 0]; // Start on X-axis
 	// Apply orientationMatrix to rotate base position
 	const rotatedPosition = m4.transformPoint(orientationMatrix, basePosition);
+	// console.log("rotatedPosition", rotatedPosition);
 	const sphereTranslation = m4.translation(
 		rotatedPosition[0],
 		rotatedPosition[1],
