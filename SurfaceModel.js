@@ -182,6 +182,65 @@ export class SurfaceModel {
 		}
 	}
 
+	createSphereData(radius) {
+		const segments = this.uSteps; // Reuse uSteps, vSteps for sphere resolution
+		const vertices = [];
+		const triangles = [];
+
+		for (let lat = 0; lat <= segments; lat++) {
+			const theta = (lat * Math.PI) / segments;
+			const sinTheta = Math.sin(theta);
+			const cosTheta = Math.cos(theta);
+
+			for (let lon = 0; lon <= segments; lon++) {
+				const phi = (lon * 2 * Math.PI) / segments;
+				const sinPhi = Math.sin(phi);
+				const cosPhi = Math.cos(phi);
+
+				const x = radius * sinTheta * cosPhi;
+				const y = radius * sinTheta * sinPhi;
+				const z = radius * cosTheta;
+
+				vertices.push({
+					position: [x, y, z],
+					normal: [x / radius, y / radius, z / radius],
+				});
+			}
+		}
+
+		for (let lat = 0; lat < segments; lat++) {
+			for (let lon = 0; lon < segments; lon++) {
+				const first = lat * (segments + 1) + lon;
+				const second = first + segments + 1;
+
+				triangles.push([first, second, first + 1]);
+				triangles.push([second, second + 1, first + 1]);
+			}
+		}
+
+		this.vertices = new Float32Array(vertices.length * 3);
+		this.normals = new Float32Array(vertices.length * 3);
+		this.indices = new Uint16Array(triangles.length * 3);
+
+		vertices.forEach((v, i) => {
+			this.vertices[i * 3] = v.position[0];
+			this.vertices[i * 3 + 1] = v.position[1];
+			this.vertices[i * 3 + 2] = v.position[2];
+			this.normals[i * 3] = v.normal[0];
+			this.normals[i * 3 + 1] = v.normal[1];
+			this.normals[i * 3 + 2] = v.normal[2];
+		});
+
+		triangles.forEach((t, i) => {
+			this.indices[i * 3] = t[0];
+			this.indices[i * 3 + 1] = t[1];
+			this.indices[i * 3 + 2] = t[2];
+		});
+
+		this.vertexCount = vertices.length;
+		this.indexCount = triangles.length * 3;
+	}
+
 	initBuffer(gl) {
 		this.vertexBuffer = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);

@@ -3,13 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>A Sievert's Surface | Andrei Chervoniak</title>
+    <title>CGW: Spatial Audio | Andrei Chervoniak</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
 
   <body>
-    <h1>A Sievert's Surface Surface</h1>
-    <p>Drag your mouse on the canvas to rotate it. (On a touch screen, you can use your finger.)</p>
+    <h1>CGW: Spatial Audio</h1>
     <article class="canvas-container">
       <canvas width="1200" height="1200" style="width: 400px; height: 400px"></canvas>
       <section class="canvas-container__controls">
@@ -55,6 +54,34 @@
             <span id="convergence-value" class="form-input__value">10.0</span>
             <input type="range" name="convergence" id="convergence" min="5.0" max="20.0" step="0.1" value="10.0" />
           </div>
+        </div>
+        <div class="form-input">
+          <label for="soundFilter">Enable Peak Filter</label>
+          <input type="checkbox" name="soundFilter" id="soundFilter" checked />
+        </div>
+        <div class="form-input">
+          <label for="filterFrequency">Filter Frequency (Hz)</label>
+          <div class="form-input__slider">
+            <span id="filterFrequency-value" class="form-input__value">1000</span>
+            <input type="range" name="filterFrequency" id="filterFrequency" min="100" max="5000" value="1000" />
+          </div>
+        </div>
+        <div class="form-input">
+          <label for="filterQ">Filter Q</label>
+          <div class="form-input__slider">
+            <span id="filterQ-value" class="form-input__value">1.0</span>
+            <input type="range" name="filterQ" id="filterQ" min="0.1" max="10.0" step="0.1" value="1.0" />
+          </div>
+        </div>
+        <div class="form-input">
+          <label for="filterGain">Filter Gain (dB)</label>
+          <div class="form-input__slider">
+            <span id="filterGain-value" class="form-input__value">6</span>
+            <input type="range" name="filterGain" id="filterGain" min="-20" max="20" value="6" />
+          </div>
+        </div>
+        <div class="form-input">
+          <button id="startAudio">Start Audio</button>
         </div>
         <video id="webcam" style="display: none" autoplay playsinline></video>
       </section>

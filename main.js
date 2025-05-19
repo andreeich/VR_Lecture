@@ -1,13 +1,16 @@
 import { ShaderProgram } from "./ShaderProgram.js";
 import { SurfaceModel } from "./SurfaceModel.js";
+import { Audio } from "./audio.js"; // New import
 
 let gl;
 let surface;
+let soundSphere; // New: sphere for sound source
 let program;
 let videoTexture;
 let webcamElement;
 let sensorSocket;
-let orientationMatrix = m4.identity(); // Initialize as identity matrix
+let orientationMatrix = m4.identity();
+let audio; // New: audio instance
 const renderingParams = {
 	eyeSeparation: 0.5,
 	fov: 45,
@@ -98,6 +101,12 @@ function initBackgroundShaders() {
 	);
 }
 
+function initSoundSphere() {
+	soundSphere = new SurfaceModel("Sound Source Sphere", 20, 20);
+	soundSphere.createSphereData(0.2);
+	soundSphere.initBuffer(gl);
+}
+
 function drawVideoBackground() {
 	if (!program.backgroundProgram) {
 		initBackgroundShaders();
@@ -171,25 +180,62 @@ function drawVideoBackground() {
 
 function setupUIControls() {
 	const stepperTypes = ["u", "v"];
-
 	stepperTypes.forEach((type) => {
 		const stepper = document.getElementById(`${type}-stepper`);
 		const counter = document.getElementById(`${type}-counter`);
-
 		if (!stepper) {
 			console.error(`Stepper element with id '${type}-stepper' not found`);
 			return;
 		}
-
 		stepper.addEventListener("input", (e) => {
 			if (counter) {
 				counter.textContent = e.target.value;
-			} else {
-				console.warn(`Counter element with id '${type}-counter' not found`);
 			}
 			initSurface();
 			draw();
 		});
+	});
+
+	// Audio filter controls
+	const soundFilterCheckbox = document.getElementById("soundFilter");
+	const filterFrequencySlider = document.getElementById("filterFrequency");
+	const filterQSlider = document.getElementById("filterQ");
+	const filterGainSlider = document.getElementById("filterGain");
+	const startAudioButton = document.getElementById("startAudio");
+
+	// Disable filter controls until audio starts
+	soundFilterCheckbox.disabled = true;
+	filterFrequencySlider.disabled = true;
+	filterQSlider.disabled = true;
+	filterGainSlider.disabled = true;
+
+	// Start audio on button click
+	startAudioButton.addEventListener("click", async () => {
+		if (!audio) {
+			audio = new Audio("./media/song.mp3");
+			await audio.start();
+			console.log("Audio started");
+			// Enable filter controls
+			soundFilterCheckbox.disabled = false;
+			filterFrequencySlider.disabled = false;
+			filterQSlider.disabled = false;
+			filterGainSlider.disabled = false;
+			startAudioButton.disabled = true; // Disable button after starting
+		}
+	});
+
+	soundFilterCheckbox.addEventListener("input", () => {
+		if (audio) audio.enableFilter(soundFilterCheckbox.checked);
+	});
+	filterFrequencySlider.addEventListener("input", () => {
+		if (audio)
+			audio.setFilterFrequency(Number.parseFloat(filterFrequencySlider.value));
+	});
+	filterQSlider.addEventListener("input", () => {
+		if (audio) audio.setFilterQ(Number.parseFloat(filterQSlider.value));
+	});
+	filterGainSlider.addEventListener("input", () => {
+		if (audio) audio.setFilterGain(Number.parseFloat(filterGainSlider.value));
 	});
 }
 
@@ -353,10 +399,10 @@ function drawEye(eyeOffset) {
 		100,
 	);
 
-	// Use orientationMatrix from sensor
-	const modelView = orientationMatrix;
+	// Surface is static: use identity matrix (no rotation from phone)
+	const modelView = m4.identity();
 
-	// Apply eye offset
+	// Apply eye offset for stereo
 	const eyeMatrix = m4.translation(eyeOffset, 0, 0);
 	const viewMatrix = m4.multiply(eyeMatrix, modelView);
 
@@ -372,55 +418,82 @@ function drawEye(eyeOffset) {
 
 	const matAcc0 = m4.multiply(rotateToPointZero, viewMatrix);
 	const matAcc1 = m4.multiply(translateToPointZero, matAcc0);
-
 	const modelViewProjection = m4.multiply(projection, matAcc1);
 
-	// Set up matrices
+	// Draw surface
 	gl.uniformMatrix4fv(program.matrixUni, false, modelViewProjection);
-	const normalMatrix = m4.transpose(m4.inverse(matAcc1));
+	let normalMatrix = m4.transpose(m4.inverse(matAcc1));
 	gl.uniformMatrix4fv(program.normalMatrixUni, false, normalMatrix);
-
 	gl.uniform3f(
 		program.lightDirectionUni,
 		lightPosition.x,
 		lightPosition.y,
 		lightPosition.z,
 	);
-	gl.uniform3fv(program.viewPositionUni, [0, 0, 5]); // Camera position
+	gl.uniform3fv(program.viewPositionUni, [0, 0, 5]);
 
-	// Draw filled surface
 	gl.uniform1i(program.isWireframeUni, false);
 	surface.draw(gl, program);
 
-	// Draw wireframe
 	gl.enable(gl.POLYGON_OFFSET_FILL);
 	gl.polygonOffset(1, 1);
 	gl.uniform1i(program.isWireframeUni, true);
 	surface.drawWireframe(gl, program);
 	gl.disable(gl.POLYGON_OFFSET_FILL);
+
+	// Draw sound source sphere
+	// Orbit around surface center (0, 0, 0) at radius 1, controlled by phone orientation
+	const radius = 1.0; // Orbit radius
+	const basePosition = [radius, 0, 0]; // Start on X-axis
+	// Apply orientationMatrix to rotate base position
+	const rotatedPosition = m4.transformPoint(orientationMatrix, basePosition);
+	const sphereTranslation = m4.translation(
+		rotatedPosition[0],
+		rotatedPosition[1],
+		rotatedPosition[2],
+	);
+	const sphereMat0 = m4.multiply(rotateToPointZero, viewMatrix);
+	const sphereMat1 = m4.multiply(sphereTranslation, sphereMat0);
+	const sphereMat2 = m4.multiply(translateToPointZero, sphereMat1);
+	const sphereMVP = m4.multiply(projection, sphereMat2);
+
+	// Update audio panner position (same as sphere)
+	if (audio)
+		audio.updatePos(rotatedPosition[0], rotatedPosition[1], rotatedPosition[2]);
+
+	// Draw sphere (red to distinguish)
+	gl.uniformMatrix4fv(program.matrixUni, false, sphereMVP);
+	normalMatrix = m4.transpose(m4.inverse(sphereMat2));
+	gl.uniformMatrix4fv(program.normalMatrixUni, false, normalMatrix);
+	gl.uniform3f(program.ambientColorUni, 0.5, 0.1, 0.1); // Reddish ambient
+	gl.uniform3f(program.diffuseColorUni, 0.8, 0.2, 0.2); // Reddish diffuse
+	gl.uniform1i(program.isWireframeUni, false);
+	soundSphere.draw(gl, program);
+	gl.uniform1i(program.isWireframeUni, true);
+	soundSphere.drawWireframe(gl, program);
+
+	// Restore lighting for next draw
+	gl.uniform3f(program.ambientColorUni, 0.3, 0.3, 0.3);
+	gl.uniform3f(program.diffuseColorUni, 0.8, 0.8, 0.8);
 }
 
 function draw() {
 	gl.clearColor(1, 1, 1, 1);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-	// Draw background video if available
 	if (webcamElement && webcamElement.videoWidth > 0) {
 		drawVideoBackground();
 	}
 
-	// Set lighting parameters with brighter values for anaglyphic view
-	gl.uniform3f(program.ambientColorUni, 0.3, 0.3, 0.3); // Brighter ambient
-	gl.uniform3f(program.diffuseColorUni, 0.8, 0.8, 0.8); // Brighter diffuse
-	gl.uniform3f(program.specularColorUni, 1.0, 1.0, 1.0); // Full specular
+	gl.uniform3f(program.specularColorUni, 1.0, 1.0, 1.0);
 	gl.uniform1f(program.shininessUni, 32.0);
 
-	// Draw for left eye (red)
+	// Draw left eye (red)
 	gl.colorMask(true, false, false, true);
 	gl.clear(gl.DEPTH_BUFFER_BIT);
 	drawEye(-renderingParams.eyeSeparation / 2);
 
-	// Draw for right eye (cyan)
+	// Draw right eye (cyan)
 	gl.colorMask(false, true, true, true);
 	gl.clear(gl.DEPTH_BUFFER_BIT);
 	drawEye(renderingParams.eyeSeparation / 2);
@@ -439,14 +512,15 @@ async function init() {
 		await initWebcam();
 		initShaderProgram();
 		initSurface();
+		initSoundSphere();
 		gl.enable(gl.DEPTH_TEST);
 
 		setupUIControls();
 		setupStereoControls();
 
-		// Initialize WebSocket for sensor data
 		initSensorWebSocket();
 
+		// Audio is initialized via button click, not here
 		animateLight(0);
 		animate();
 	} catch (e) {
