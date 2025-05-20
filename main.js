@@ -376,7 +376,7 @@ function quaternionToMatrix(q) {
 
 function initSensorWebSocket() {
 	const wsUrl =
-		"ws://192.168.0.157:8080/sensor/connect?type=android.sensor.game_rotation_vector";
+		"ws://192.168.0.216:8080/sensor/connect?type=android.sensor.game_rotation_vector";
 	sensorSocket = new WebSocket(wsUrl);
 
 	sensorSocket.onopen = () => {
